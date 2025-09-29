@@ -13,20 +13,20 @@ function p1b()
     θ_T = 0
     δt  = 0.02
     T   = 20
-    N   = round(Int, δt / T)
+    N   = round(Int, T / δt)
 
     # Allocate memory. Do not assign value (increases speed, but cannot assume that each value is a 0)
     Rlog = Matrix{Float64}(undef, 1, N)
     βlog = Matrix{Float64}(undef, 1, N)
 
-    R_dot = Float64(undef)
-    β_dot = Float64(undef)
+    R_dot = 0.0
+    β_dot = 0.0
 
     # * KRIS!!!
     # * we have to kill the fucking titan
     # Shoot missile           ♡            Do nothing
 
-    for k in 1:N
+    for k in range(1, N)
         R_dot = V_T * cos(β - θ_T) - V_M * cos(β - θ)
         β_dot = -(V_T * sin(β - θ_T) - V_M * sin(β - θ)) / R
 
@@ -37,7 +37,7 @@ function p1b()
         βlog[k] = β
     end
 
-    t = (0:(N-1)) .* δt
+    t = range(0, N - 1) * δt
 end
 
 end # module AE546HW2
