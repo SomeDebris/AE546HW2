@@ -37,6 +37,8 @@ function p1b()
         βlog[k] = β
     end
 
+    @info "Initial values of R_dot and β_dot" R_dot[1] β_dot[1]
+
     t = range(0, N - 1) * δt
 end
 
