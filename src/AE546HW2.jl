@@ -1,14 +1,14 @@
 module AE546HW2
 
-using Plots, ModelingToolkit, DifferentialEquations
+using Plots, ModelingToolkit, DifferentialEquations, LaTeXStrings
 
 greet() = print("Hello World!")
 
 function p1b()
     V_M = 300
     V_T = 200
-    R   = 6000
-    β   = deg2rad(30)
+    R0  = 6000
+    β0  = deg2rad(30)
     θ   = deg2rad(20)
     θ_T = 0
     δt  = 0.02
@@ -16,9 +16,13 @@ function p1b()
     N   = round(Int, T / δt)
 
     # Allocate memory. Do not assign value (increases speed, but cannot assume that each value is a 0)
-    Rlog = Matrix{Float64}(undef, 1, N)
-    βlog = Matrix{Float64}(undef, 1, N)
+    Rlog = Matrix{Float64}(undef, N, 1)
+    βlog = Matrix{Float64}(undef, N, 1)
+    R_dotlog = Matrix{Float64}(undef, N, 1)
+    β_dotlog = Matrix{Float64}(undef, N, 1)
 
+    R = R0
+    β = β0
     R_dot = 0.0
     β_dot = 0.0
 
@@ -35,11 +39,28 @@ function p1b()
 
         Rlog[k] = R
         βlog[k] = β
+        R_dotlog[k] = R_dot
+        β_dotlog[k] = β_dot
+
     end
 
-    @info "Initial values of R_dot and β_dot" R_dot[1] β_dot[1]
+    @info "Initial values (meters, degrees)" R=R0 β=rad2deg(β0) R_dot=R_dotlog[1] β_dot=rad2deg(β_dotlog[1])
+    @info "Final values (meters, degrees)" R β=rad2deg(β) R_dot=R_dotlog[end] β_dot=rad2deg(β_dotlog[end])
 
     t = range(0, N - 1) * δt
+
+    plot(t, [Rlog,rad2deg.(βlog)];
+         layout = (2,1),
+         xlabel=["" L"$t$ [s]"],
+         ylabel=[L"$R$ [m]" L"$\beta$ [deg]"],
+         xlims=(0, T),
+         ylims=[(3500,6000) (15,30)],
+         #=legend=false,=#
+         gridstyle=:dash,
+         label=[L"R(t)" L"\beta(t)"],
+        )
 end
+
+function p2a()
 
 end # module AE546HW2
