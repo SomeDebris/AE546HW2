@@ -4,6 +4,26 @@ using Plots, ModelingToolkit, DifferentialEquations, LaTeXStrings
 
 greet() = print("Hello World!")
 
+#=struct GuidanceProblem=#
+#=    # Missile velocity vector=#
+#=    v_M::AbstractVector=#
+#=    # Target velocity vector=#
+#=    v_T::AbstractVector=#
+#=    R₀=#
+#=    t₀=#
+#=    δt=#
+#=end=#
+#==#
+#=function GuidanceProblem(v_M, v_T, )=#
+#=end=#
+
+function R_diff1(Velocity_Target, Velocity_Missile, β, θ_Missile, θ_Target)
+    Velocity_Target * cos(β - θ_Target) - Velocity_Missile * cos(β - θ_Missile)
+end
+function β_diff1(Velocity_Target, Velocity_Missile, R, β, θ_Missile, θ_Target)
+    -(Velocity_Target * sin(β - θ_Target) - Velocity_Missile * sin(β - θ_Missile)) / R
+end
+
 function p1b()
     V_M = 300
     V_T = 200
@@ -62,5 +82,6 @@ function p1b()
 end
 
 function p2a()
+end
 
 end # module AE546HW2
