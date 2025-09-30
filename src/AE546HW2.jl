@@ -1,8 +1,12 @@
 module AE546HW2
 
-using Plots, LaTeXStrings
+using Plots
+using LaTeXStrings
+using Match
 
 greet() = print("Hello World!")
+
+@enum GuidanceLaw Persuit FixedLead ConstantBearing
 
 struct GuidanceProblem
     # Missile velocity vector
@@ -88,14 +92,16 @@ end
 
 round_up_nearest(x, step) = ceil(x / step) * step
 
-function p2a(; maxiter = 100000, tol = 0.01)
-    V_M = 300
-    V_T = 200
-    R₀  = 6000
-    β₀  = deg2rad(30)
-    θ   = deg2rad(20)
-    θ_T = 0
-    δt  = 0.02
+function p2a(guidance_law::GuidanceLaw;
+        V_M = 300,
+        V_T = 200,
+        R₀ = 6000,
+        β₀ = deg2rad(30),
+        θ  = deg2rad(20),
+        θ_T= 0,
+        δt = 0.02,
+        maxiter::Int = 100000,
+        tol = 0.01)
 
     @debug "Integration parameters" maxiter tol
 
@@ -119,6 +125,7 @@ function p2a(; maxiter = 100000, tol = 0.01)
     β = β₀
     R_dot = 0.0
     β_dot = 0.0
+    θ_dot = 0.0
     missile_position = [0.0, 0.0]
     target_position =  missile_position .+ [R₀*cos(β₀), R₀*sin(β₀)]
     @debug "target position initial" target_position
@@ -129,11 +136,29 @@ function p2a(; maxiter = 100000, tol = 0.01)
 
     iters = 0
 
+    # For GuidanceLaw.FixedLead
+    Θ₀ = asin((V_T / V_M) * sin(β₀))
+    if GuidanceLaw.FixedLead == guidance_law
+        @debug "Fixed lead guidance law selected." Θ₀
+    end
 
     while true
         iters += 1
         # Guidance law:
-        θ = β
+        @match guidance_law begin
+            GuidanceLaw.Persuit   => begin
+                θ = β
+                θ_dot = β_dot
+            end
+            GuidanceLaw.FixedLead => begin
+                θ = β - Θ₀
+                θ_dot = β_dot
+            end
+            GuidanceLaw.ConstantBearing => begin
+                θ = β - asin((V_T / V_M) * sin(β₀))
+                θ_dot = β_dot - (V_T * cos(β) * β_dot)/(V_M * sqrt(1 - (V_T^2 * sin(β)^2)/(V_M^2)))
+            end
+        end
 
         R_dot = V_T * cos(β - θ_T) - V_M * cos(β - θ)
         β_dot = -(V_T * sin(β - θ_T) - V_M * sin(β - θ)) / R
@@ -153,7 +178,7 @@ function p2a(; maxiter = 100000, tol = 0.01)
         push!(target_path,  Tuple{Float64,Float64}(target_position))
 
         # Guidance law also goes and says:
-        push!(θ_dotlog, β_dot)
+        push!(θ_dotlog, θ_dot)
 
         if R <= tol
             @debug "R value less than tolerance" iters
