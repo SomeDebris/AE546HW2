@@ -32,8 +32,8 @@ end
 function p1b()
     V_M = 300
     V_T = 200
-    R0  = 6000
-    β0  = deg2rad(30)
+    R₀  = 6000
+    β₀  = deg2rad(30)
     θ   = deg2rad(20)
     θ_T = 0
     δt  = 0.02
@@ -46,8 +46,8 @@ function p1b()
     R_dotlog = Matrix{Float64}(undef, N, 1)
     β_dotlog = Matrix{Float64}(undef, N, 1)
 
-    R = R0
-    β = β0
+    R = R₀
+    β = β₀
     R_dot = 0.0
     β_dot = 0.0
 
@@ -69,7 +69,7 @@ function p1b()
 
     end
 
-    @info "Initial values (meters, degrees)" R=R0 β=rad2deg(β0) R_dot=R_dotlog[1] β_dot=rad2deg(β_dotlog[1])
+    @info "Initial values (meters, degrees)" R=R₀ β=rad2deg(β₀) R_dot=R_dotlog[1] β_dot=rad2deg(β_dotlog[1])
     @info "Final values (meters, degrees)" R β=rad2deg(β) R_dot=R_dotlog[end] β_dot=rad2deg(β_dotlog[end])
 
     t = range(0, N - 1) * δt
@@ -91,11 +91,11 @@ round_up_nearest(x, step) = ceil(x / step) * step
 function p2a(; maxiter = 100000, tol = 0.01)
     V_M = 300
     V_T = 200
-    R0  = 6000
-    β0  = deg2rad(30)
+    R₀  = 6000
+    β₀  = deg2rad(30)
     θ   = deg2rad(20)
     θ_T = 0
-    δt  = 0.01
+    δt  = 0.02
 
     @debug "Integration parameters" maxiter tol
 
@@ -108,14 +108,20 @@ function p2a(; maxiter = 100000, tol = 0.01)
     R_dotlog = Vector{Float64}(undef, 0)
     β_dotlog = Vector{Float64}(undef, 0)
 
+    # Save the x and y of the missile and target
+    missile_path = Vector{Tuple{Float64,Float64}}(undef, 0)
+    target_path = Vector{Tuple{Float64,Float64}}(undef, 0)
 
     # Thing I shall be recording this time around
     θ_dotlog = Vector{Float64}(undef, 0)
 
-    R = R0
-    β = β0
+    R = R₀
+    β = β₀
     R_dot = 0.0
     β_dot = 0.0
+    missile_position = [0.0, 0.0]
+    target_position =  missile_position .+ [R₀*cos(β₀), R₀*sin(β₀)]
+    @debug "target position initial" target_position
 
     # * KRIS!!!
     # * we have to kill the fucking titan
@@ -132,13 +138,19 @@ function p2a(; maxiter = 100000, tol = 0.01)
         R_dot = V_T * cos(β - θ_T) - V_M * cos(β - θ)
         β_dot = -(V_T * sin(β - θ_T) - V_M * sin(β - θ)) / R
 
-        R = R + R_dot * δt
-        β = β + β_dot * δt
+        R += R_dot * δt
+        β += β_dot * δt
+
+        missile_position += (V_M * δt) .* [cos(θ), sin(θ)]
+        target_position  += (V_T * δt) .* [cos(θ_T), sin(θ_T)]
 
         push!(Rlog, R)
         push!(βlog, β)
         push!(R_dotlog, R_dot)
         push!(β_dotlog, β_dot)
+
+        push!(missile_path, Tuple{Float64,Float64}(missile_position))
+        push!(target_path,  Tuple{Float64,Float64}(target_position))
 
         # Guidance law also goes and says:
         push!(θ_dotlog, β_dot)
@@ -154,22 +166,38 @@ function p2a(; maxiter = 100000, tol = 0.01)
         end
     end
 
-    @info "Initial values (meters, degrees)" R=R0 β=rad2deg(β0) R_dot=R_dotlog[1] β_dot=rad2deg(β_dotlog[1]) t=0
+    @debug "Missile path" missile_path
+    @debug "Target path" target_path
 
-    @info "Final values (meters, degrees)" R β=rad2deg(β) R_dot=R_dotlog[end] β_dot=rad2deg(β_dotlog[end]) t=(iters-1)*δt
 
-    t = range(0, iters - 1) * δt
+    t = (iters - 1) * δt
 
-    plot(t, [Rlog,rad2deg.(βlog)];
-         layout = (2,1),
-         xlabel=["" L"$t$ [s]"],
-         ylabel=[L"$R$ [m]" L"$\beta$ [deg]"],
-         xlims=(0, round_up_nearest(iters * δt, 10)),
-         #=ylims=[(3500,6000) (15,30)],=#
-         #=legend=false,=#
-         gridstyle=:dash,
-         label=[L"R(t)" L"\beta(t)"],
-        )
+    @info "Initial values (meters, degrees)" R=R₀ β=rad2deg(β₀) R_dot=R_dotlog[1] β_dot=rad2deg(β_dotlog[1]) t=0
+
+    @info "Final values (meters, degrees)" R β=rad2deg(β) R_dot=R_dotlog[end] β_dot=rad2deg(β_dotlog[end]) t
+
+    #=plot(t, [Rlog,rad2deg.(βlog)];=#
+    #=     layout = (2,1),=#
+    #=     xlabel=["" L"$t$ [s]"],=#
+    #=     ylabel=[L"$R$ [m]" L"$\beta$ [deg]"],=#
+    #=     xlims=(0, round_up_nearest(iters * δt, 10)),=#
+    #=     ylims=[(0,R₀) (0,round_up_nearest(rad2deg(β₀), 5))],=#
+    #=     #=legend=false,=#=#
+    #=     gridstyle=:dash,=#
+    #=     label=[L"R(t)" L"\beta(t)"],=#
+    #=    )=#
+    plot(missile_path,
+        label = "Missile Path",
+        xlabel= L"$x$ [m]",
+        ylabel= L"$y$ [m]",
+        #=aspect_ratio=:equal,=#
+        gridstyle=:dash,
+        xlims=(0,round_up_nearest(missile_position[1], 1000)),
+        ylims=(0,round_up_nearest(missile_position[2], 1000)))
+    plot!(target_path,
+         label = "Target Path")
 end
+
+
 
 end # module AE546HW2
