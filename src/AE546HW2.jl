@@ -3,6 +3,9 @@ module AE546HW2
 using Plots
 using LaTeXStrings
 using Match
+using Printf
+using ModelingToolkit
+using DifferentialEquations
 
 greet() = print("Hello World!")
 
@@ -10,9 +13,9 @@ greet() = print("Hello World!")
 
 struct GuidanceProblem
     # Missile velocity vector
-    V_M::AbstractVector
+    Velocity_missile::AbstractVector
     # Target velocity vector
-    V_T::AbstractVector
+    Velocity_target::AbstractVector
     R₀
     β₀
     t₀
@@ -20,10 +23,10 @@ struct GuidanceProblem
 end
 
 function GuidanceProblem(v_M::Real, v_T::Real, θ₀, θ_T₀, R₀, β₀, t₀, δt)
-    V_M = v_M * [cos(θ₀), sin(θ₀), 0]
-    V_T = v_T * [cos(θ_T₀), sin(θ_T₀), 0]
+    Velocity_missile = v_M * [cos(θ₀), sin(θ₀), 0]
+    Velocity_target = v_T * [cos(θ_T₀), sin(θ_T₀), 0]
 
-    GuidanceProblem(V_M, V_T, R₀, β₀, t₀, δt)
+    GuidanceProblem(Velocity_missile, Velocity_target, R₀, β₀, t₀, δt)
 end
 
 function R_diff1(Velocity_Target, Velocity_Missile, β, θ_Missile, θ_Target)
@@ -34,8 +37,8 @@ function β_diff1(Velocity_Target, Velocity_Missile, R, β, θ_Missile, θ_Targe
 end
 
 function p1b()
-    V_M = 300
-    V_T = 200
+    Velocity_missile = 300
+    Velocity_target = 200
     R₀  = 6000
     β₀  = deg2rad(30)
     θ   = deg2rad(20)
@@ -60,8 +63,8 @@ function p1b()
     # Shoot missile           ♡            Do nothing
 
     for k in range(1, N)
-        R_dot = V_T * cos(β - θ_T) - V_M * cos(β - θ)
-        β_dot = -(V_T * sin(β - θ_T) - V_M * sin(β - θ)) / R
+        R_dot = Velocity_target * cos(β - θ_T) - Velocity_missile * cos(β - θ)
+        β_dot = -(Velocity_target * sin(β - θ_T) - Velocity_missile * sin(β - θ)) / R
 
         R = R + R_dot * δt
         β = β + β_dot * δt
@@ -93,8 +96,8 @@ end
 round_up_nearest(x, step) = ceil(x / step) * step
 
 function p2a(guidance_law::AE546HW2.GuidanceLaw;
-        V_M = 300,
-        V_T = 200,
+        Velocity_missile = 300,
+        Velocity_target = 200,
         R₀ = 6000,
         β₀ = deg2rad(30),
         θ  = deg2rad(20),
@@ -104,6 +107,17 @@ function p2a(guidance_law::AE546HW2.GuidanceLaw;
         tol = 0.01)
 
     @debug "Integration parameters" maxiter tol
+
+    if !(guidance_law in (Persuit, FixedLead, ConstantBearing))
+        @error "Implimentation for this guidance law does not exist! Implemented laws are AE546HW2.Persuit, AE546HW2.FixedLead, AE546HW2.ConstantBearing." guidance_law
+        return 1
+    end
+
+    guidancelawtext = @match guidance_law begin
+        $Persuit         => "guidance-persuit"
+        $FixedLead       => "guidance-fixedlead"
+        $ConstantBearing => "guidance-constbearing"
+    end
 
     #=T   = 20=#
     #=N   = round(Int, T / δt)=#
@@ -137,7 +151,7 @@ function p2a(guidance_law::AE546HW2.GuidanceLaw;
     iters = 0
 
     # For FixedLead
-    Θ₀ = asin((V_T / V_M) * sin(β₀))
+    Θ₀ = asin((Velocity_target / Velocity_missile) * sin(β₀))
     if FixedLead == guidance_law
         @debug "Fixed lead guidance law selected." Θ₀
     end
@@ -148,23 +162,23 @@ function p2a(guidance_law::AE546HW2.GuidanceLaw;
         θ = @match guidance_law begin
             $Persuit   => β
             $FixedLead => β - Θ₀
-            $ConstantBearing => β - asin((V_T / V_M) * sin(β))
+            $ConstantBearing => β - asin((Velocity_target / Velocity_missile) * sin(β))
         end
 
-        R_dot = V_T * cos(β - θ_T) - V_M * cos(β - θ)
-        β_dot = -(V_T * sin(β - θ_T) - V_M * sin(β - θ)) / R
+        R_dot = Velocity_target * cos(β - θ_T) - Velocity_missile * cos(β - θ)
+        β_dot = -(Velocity_target * sin(β - θ_T) - Velocity_missile * sin(β - θ)) / R
 
         # Guidance law, θ_dot computed afterwards because R_dotβ_dot are here
         θ_dot = @match guidance_law begin
             $Persuit || $FixedLead => β_dot
-            $ConstantBearing      => β_dot - (V_T * cos(β) * β_dot)/(V_M * sqrt(1 - (V_T^2 * sin(β)^2)/(V_M^2)))
+            $ConstantBearing      => β_dot - (Velocity_target * cos(β) * β_dot)/(Velocity_missile * sqrt(1 - (Velocity_target^2 * sin(β)^2)/(Velocity_missile^2)))
         end
 
         R += R_dot * δt
         β += β_dot * δt
 
-        missile_position += (V_M * δt) .* [cos(θ), sin(θ)]
-        target_position  += (V_T * δt) .* [cos(θ_T), sin(θ_T)]
+        missile_position += (Velocity_missile * δt) .* [cos(θ), sin(θ)]
+        target_position  += (Velocity_target * δt) .* [cos(θ_T), sin(θ_T)]
 
         push!(Rlog, R)
         push!(βlog, β)
@@ -195,6 +209,7 @@ function p2a(guidance_law::AE546HW2.GuidanceLaw;
 
 
     t = (iters - 1) * δt
+    trange = range(0, iters - 1) * δt
 
     @info "Initial values (meters, degrees)" R=R₀ β=rad2deg(β₀) R_dot=R_dotlog[1] β_dot=rad2deg(β_dotlog[1]) t=0
 
@@ -210,7 +225,7 @@ function p2a(guidance_law::AE546HW2.GuidanceLaw;
     #=     gridstyle=:dash,=#
     #=     label=[L"R(t)" L"\beta(t)"],=#
     #=    )=#
-    plot(missile_path,
+    pxy = plot(missile_path,
         label = "Missile Path",
         xlabel= L"$x$ [m]",
         ylabel= L"$y$ [m]",
@@ -221,6 +236,69 @@ function p2a(guidance_law::AE546HW2.GuidanceLaw;
     plot!(target_path,
          label = "Target Path")
     #=plot(θ_dotlog)=#
+    pθ_dot = plot(trange, θ_dotlog;
+                xlims  = (0,round_up_nearest(t, 10)),
+                label  = L"\dot{\theta}(t)",
+                xlabel = L"$t$ [s]",
+                gridstyle=:dash,
+                ylabel = L"$\theta$ [rad]")
+
+    savefig(pxy,    @sprintf "plot_path_%s_.pdf" guidancelawtext)
+    savefig(pθ_dot, @sprintf "plot_thetadot_%s_.pdf" guidancelawtext)
+
+    return 0
+end
+
+function problem3(N;
+    Velocity_closing = 120,
+    Velocity_missile = 300,
+    θ₀ = deg2rad(5),
+    R₀ = 6000,
+    n_T = 0,
+    δt = 0.02)
+
+    # Compute the values of λ for this problem
+    λ = @. N * Velocity_closing / Velocity_missile
+
+    # Final time: eq 3.26
+    time_final = R₀/Velocity_closing
+
+    # y(t), eq 3.41
+    y(t) = @match (n_T, N) begin
+        # n_T == 0  AND  N != 1
+        (nt, Nset) where (nt == 0 && Nset != 1)  =>  @. (Velocity_missile * θ₀)/(N - 1) * (1 - 1/(time_final^(N-1)) * (time_final - t)^(N-1))
+
+        # n_T != 0  AND  N is 1
+        (nt, Nset) where (nt != 0 && Nset == 1) => begin
+            @. -n_T * (time_final - t) * (t - time_final*log(time_final - t) + time_final * log(time_final))
+        end
+
+        (nt, Nset) where (nt != 0 && Nset == 2) => begin
+            @. -n_T * ((1/time_final) * (time_final - t)^2 - (time_final - t))
+        end
+
+        # n_T != 0  AND  N is neither 1 nor 2
+        (nt, Nset) where (nt != 0 && !(Nset in (1,2))) => begin
+            @. n_T * (time_final - t)^N * (
+                (time_final - t)^(2 - N)/(2 - N) -
+                time_final * (time_final - t)^(1-N)/(1-N) +
+                (time_final^(2-N))/((1-N) * (2-N)))
+        end
+    end
+
+    a_c(t) = @match (n_T, N) begin
+        (nt, Nset) where nt == 0 => @. - (Velocity_missile * θ₀)/(time_final^(N-1)) * (time_final - t)^(N-2)
+        (nt, Nset) where (nt != 0  && Nset == 1)  => Inf
+        (nt, Nset) where (nt != 0  && Nset == 2)  => -(1 + 2/time_final) * n_T
+        (nt, Nset) where (nt != 0  && !(Nset in (1,2)))  => @. (n_T * N) / (2 - N) * (1 - (1 - t/time_final)^(N-2))
+    end
+
+    trange = range(0, time_final - δt; step = δt)
+    @debug "trange" trange time_final
+
+    plot(trange, y(trange))
+    
+
 end
 
 
