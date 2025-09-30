@@ -92,7 +92,7 @@ end
 
 round_up_nearest(x, step) = ceil(x / step) * step
 
-function p2a(guidance_law::GuidanceLaw;
+function p2a(guidance_law::AE546HW2.GuidanceLaw;
         V_M = 300,
         V_T = 200,
         R₀ = 6000,
@@ -136,32 +136,29 @@ function p2a(guidance_law::GuidanceLaw;
 
     iters = 0
 
-    # For GuidanceLaw.FixedLead
+    # For FixedLead
     Θ₀ = asin((V_T / V_M) * sin(β₀))
-    if GuidanceLaw.FixedLead == guidance_law
+    if FixedLead == guidance_law
         @debug "Fixed lead guidance law selected." Θ₀
     end
 
     while true
         iters += 1
         # Guidance law:
-        @match guidance_law begin
-            GuidanceLaw.Persuit   => begin
-                θ = β
-                θ_dot = β_dot
-            end
-            GuidanceLaw.FixedLead => begin
-                θ = β - Θ₀
-                θ_dot = β_dot
-            end
-            GuidanceLaw.ConstantBearing => begin
-                θ = β - asin((V_T / V_M) * sin(β₀))
-                θ_dot = β_dot - (V_T * cos(β) * β_dot)/(V_M * sqrt(1 - (V_T^2 * sin(β)^2)/(V_M^2)))
-            end
+        θ = @match guidance_law begin
+            $Persuit   => β
+            $FixedLead => β - Θ₀
+            $ConstantBearing => β - asin((V_T / V_M) * sin(β))
         end
 
         R_dot = V_T * cos(β - θ_T) - V_M * cos(β - θ)
         β_dot = -(V_T * sin(β - θ_T) - V_M * sin(β - θ)) / R
+
+        # Guidance law, θ_dot computed afterwards because R_dotβ_dot are here
+        θ_dot = @match guidance_law begin
+            $Persuit || $FixedLead => β_dot
+            $ConstantBearing      => β_dot - (V_T * cos(β) * β_dot)/(V_M * sqrt(1 - (V_T^2 * sin(β)^2)/(V_M^2)))
+        end
 
         R += R_dot * δt
         β += β_dot * δt
@@ -194,6 +191,8 @@ function p2a(guidance_law::GuidanceLaw;
     @debug "Missile path" missile_path
     @debug "Target path" target_path
 
+    @debug "Theta and Thetadot" θ θ_dotlog
+
 
     t = (iters - 1) * δt
 
@@ -221,6 +220,7 @@ function p2a(guidance_law::GuidanceLaw;
         ylims=(0,round_up_nearest(missile_position[2], 1000)))
     plot!(target_path,
          label = "Target Path")
+    #=plot(θ_dotlog)=#
 end
 
 
