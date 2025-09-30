@@ -1,6 +1,6 @@
 module AE546HW2
 
-using Plots, ModelingToolkit, DifferentialEquations, LaTeXStrings
+using Plots, LaTeXStrings
 
 greet() = print("Hello World!")
 
@@ -86,25 +86,31 @@ function p1b()
         )
 end
 
-function p2a()
+round_up_nearest(x, step) = ceil(x / step) * step
+
+function p2a(; maxiter = 100000, tol = 0.01)
     V_M = 300
     V_T = 200
     R0  = 6000
     β0  = deg2rad(30)
     θ   = deg2rad(20)
     θ_T = 0
-    δt  = 0.02
-    T   = 20
-    N   = round(Int, T / δt)
+    δt  = 0.01
+
+    @debug "Integration parameters" maxiter tol
+
+    #=T   = 20=#
+    #=N   = round(Int, T / δt)=#
 
     # Allocate memory. Do not assign value (increases speed, but cannot assume that each value is a 0)
-    Rlog = Matrix{Float64}(undef, N, 1)
-    βlog = Matrix{Float64}(undef, N, 1)
-    R_dotlog = Matrix{Float64}(undef, N, 1)
-    β_dotlog = Matrix{Float64}(undef, N, 1)
+    Rlog = Vector{Float64}(undef, 0)
+    βlog = Vector{Float64}(undef, 0)
+    R_dotlog = Vector{Float64}(undef, 0)
+    β_dotlog = Vector{Float64}(undef, 0)
+
 
     # Thing I shall be recording this time around
-    θ_dotlog = Matrix{Float64}(undef, N, 1)
+    θ_dotlog = Vector{Float64}(undef, 0)
 
     R = R0
     β = β0
@@ -115,7 +121,11 @@ function p2a()
     # * we have to kill the fucking titan
     # Shoot missile           ♡            Do nothing
 
-    for k in range(1, N)
+    iters = 0
+
+
+    while true
+        iters += 1
         # Guidance law:
         θ = β
 
@@ -125,26 +135,37 @@ function p2a()
         R = R + R_dot * δt
         β = β + β_dot * δt
 
-        Rlog[k] = R
-        βlog[k] = β
-        R_dotlog[k] = R_dot
-        β_dotlog[k] = β_dot
+        push!(Rlog, R)
+        push!(βlog, β)
+        push!(R_dotlog, R_dot)
+        push!(β_dotlog, β_dot)
 
         # Guidance law also goes and says:
-        θ_dotlog[k] = β_dot
+        push!(θ_dotlog, β_dot)
+
+        if R <= tol
+            @debug "R value less than tolerance" iters
+            break
+        end
+
+        if iters >= maxiter
+            @warn "Max iterations reached." iters
+            break
+        end
     end
 
-    @info "Initial values (meters, degrees)" R=R0 β=rad2deg(β0) R_dot=R_dotlog[1] β_dot=rad2deg(β_dotlog[1])
-    @info "Final values (meters, degrees)" R β=rad2deg(β) R_dot=R_dotlog[end] β_dot=rad2deg(β_dotlog[end])
+    @info "Initial values (meters, degrees)" R=R0 β=rad2deg(β0) R_dot=R_dotlog[1] β_dot=rad2deg(β_dotlog[1]) t=0
 
-    t = range(0, N - 1) * δt
+    @info "Final values (meters, degrees)" R β=rad2deg(β) R_dot=R_dotlog[end] β_dot=rad2deg(β_dotlog[end]) t=(iters-1)*δt
+
+    t = range(0, iters - 1) * δt
 
     plot(t, [Rlog,rad2deg.(βlog)];
          layout = (2,1),
          xlabel=["" L"$t$ [s]"],
          ylabel=[L"$R$ [m]" L"$\beta$ [deg]"],
-         xlims=(0, T),
-         ylims=[(3500,6000) (15,30)],
+         xlims=(0, round_up_nearest(iters * δt, 10)),
+         #=ylims=[(3500,6000) (15,30)],=#
          #=legend=false,=#
          gridstyle=:dash,
          label=[L"R(t)" L"\beta(t)"],
