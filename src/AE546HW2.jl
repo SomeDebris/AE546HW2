@@ -295,9 +295,8 @@ function problem3functions(N;
     y, a_c, time_final
 end
 
-function problem3()
-    N_values = [1.5, 2, 3, 4]
-    funcs = problem3functions.(N_values)
+function problem3at_ntsetting(N_values, n_T::Float64)
+    funcs = problem3functions.(N_values; n_T=fill(n_T, length(N_values)))
 
     yPlot   = plot(; xlabel=L"$t$ [s]", ylabel=L"$y(t)$ [m]", gridstyle=:dash)
     a_cPlot = plot(; xlabel=L"$t$ [s]", ylabel=L"$a_c(t)$ [m/s]", gridstyle=:dash)
