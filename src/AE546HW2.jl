@@ -4,8 +4,8 @@ using Plots
 using LaTeXStrings
 using Match
 using Printf
-using ModelingToolkit
-using DifferentialEquations
+#=using ModelingToolkit=#
+#=using DifferentialEquations=#
 
 greet() = print("Hello World!")
 
@@ -249,13 +249,13 @@ function p2a(guidance_law::AE546HW2.GuidanceLaw;
     return 0
 end
 
-function problem3(N;
+function problem3functions(N;
     Velocity_closing = 120,
     Velocity_missile = 300,
     θ₀ = deg2rad(5),
     R₀ = 6000,
     n_T = 0,
-    δt = 0.02)
+    samples::Int = 3000)
 
     # Compute the values of λ for this problem
     λ = @. N * Velocity_closing / Velocity_missile
@@ -293,12 +293,55 @@ function problem3(N;
         (nt, Nset) where (nt != 0  && !(Nset in (1,2)))  => @. (n_T * N) / (2 - N) * (1 - (1 - t/time_final)^(N-2))
     end
 
-    trange = range(0, time_final - δt; step = δt)
-    @debug "trange" trange time_final
+    y, a_c, time_final
+end
 
-    plot(trange, y(trange))
-    
+function problem3()
+    N_values = [1.5, 2, 3, 4]
+    funcs = problem3functions.(N_values)
 
+    yPlot   = plot(; xlabel=L"$t$ [s]", ylabel=L"$y(t)$ [m]")
+    a_cPlot = plot(; xlabel=L"$t$ [s]", ylabel=L"$a_c(t)$ [m/s]")
+
+    dashpatterncyle = [:solid, :dashdotdot, :dash, :dashdot, :dot]
+
+    for (idx, N) in enumerate(N_values)
+        tbounds = (0, funcs[idx][3])
+        problem3plot_y!(yPlot, funcs[idx][1], tbounds, 500; label=L"N = %$(N)", ls=dashpatterncyle[idx % length(dashpatterncyle)])
+        problem3plot_a_c!(a_cPlot, funcs[idx][2], tbounds, 500; label=L"N = %$(N)", ls=dashpatterncyle[idx % length(dashpatterncyle)])
+    end
+
+    yPlot
+end
+
+function problem3plot_y!(plotref::Plots.Plot, y::Function, time_bounds::Tuple{Real,Real}, samples::Int; kwargs...)
+    trange = LinRange(time_bounds[1], time_bounds[2], samples)
+    @debug "Adding y(t) to plot" plotref y time_bounds
+
+    plot!(plotref,
+          trange, y(trange);
+          kwargs...)
+          #=legend = false,=#
+          #=xlabel=L"$t$ [s]",=#
+          #=ylabel=L"$y$ [m]",=#
+          #=gridstyle=:dash,=#
+          #=xlims=(0,round_up_nearest(time_final,10)+1),=#
+          #=ylims=(0,round_up_nearest(y(time_final), 10)))=#
+end
+
+function problem3plot_a_c!(plotref::Plots.Plot, a_c::Function, time_bounds::Tuple{Real,Real}, samples::Int; kwargs...)
+    trange = LinRange(time_bounds[1], time_bounds[2], samples)
+    @debug "Adding a_c(t) to plot" plotref a_c time_bounds
+
+    plot!(plotref,
+          trange, a_c(trange);
+          kwargs...)
+          #=legend = false,=#
+          #=xlabel=L"$t$ [s]",=#
+          #=ylabel=L"$y$ [m]",=#
+          #=gridstyle=:dash,=#
+          #=xlims=(0,round_up_nearest(time_final,10)+1),=#
+          #=ylims=(0,round_up_nearest(y(time_final), 10)))=#
 end
 
 
