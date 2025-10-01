@@ -266,7 +266,9 @@ function problem3functions(N;
     # y(t), eq 3.41
     y(t) = @match (n_T, N) begin
         # n_T == 0  AND  N != 1
-        (nt, Nset) where (nt == 0 && Nset != 1)  =>  @. (Velocity_missile * θ₀)/(N - 1) * (1 - 1/(time_final^(N-1)) * (time_final - t)^(N-1))
+        (nt, Nset) where (nt == 0 && Nset != 1)  =>  begin
+            @. (Velocity_missile * θ₀)/(N - 1) * (1 - 1/(time_final^(N-1)) * (time_final - t)^(N-1))
+        end
 
         # n_T != 0  AND  N is 1
         (nt, Nset) where (nt != 0 && Nset == 1) => begin
@@ -279,10 +281,7 @@ function problem3functions(N;
 
         # n_T != 0  AND  N is neither 1 nor 2
         (nt, Nset) where (nt != 0 && !(Nset in (1,2))) => begin
-            @. n_T * (time_final - t)^N * (
-                (time_final - t)^(2 - N)/(2 - N) -
-                time_final * (time_final - t)^(1-N)/(1-N) +
-                (time_final^(2-N))/((1-N) * (2-N)))
+            @. n_T * (time_final - t)^N * ( (time_final - t)^(2 - N)/(2 - N) - time_final * (time_final - t)^(1-N)/(1-N) + (time_final^(2-N))/((1-N) * (2-N)))
         end
     end
 
