@@ -299,8 +299,8 @@ function problem3()
     N_values = [1.5, 2, 3, 4]
     funcs = problem3functions.(N_values)
 
-    yPlot   = plot(; xlabel=L"$t$ [s]", ylabel=L"$y(t)$ [m]")
-    a_cPlot = plot(; xlabel=L"$t$ [s]", ylabel=L"$a_c(t)$ [m/s]")
+    yPlot   = plot(; xlabel=L"$t$ [s]", ylabel=L"$y(t)$ [m]", gridstyle=:dash)
+    a_cPlot = plot(; xlabel=L"$t$ [s]", ylabel=L"$a_c(t)$ [m/s]", gridstyle=:dash)
 
     dashpatterncyle = [:solid, :dashdotdot, :dash, :dashdot, :dot]
 
@@ -310,7 +310,8 @@ function problem3()
         problem3plot_a_c!(a_cPlot, funcs[idx][2], tbounds, 500; label=L"N = %$(N)", ls=dashpatterncyle[idx % length(dashpatterncyle)])
     end
 
-    yPlot
+    savefig(yPlot, "plot_p3-y_nT0.pdf")
+    savefig(a_cPlot, "plot_p3-a_c_nT0.pdf")
 end
 
 function problem3plot_y!(plotref::Plots.Plot, y::Function, time_bounds::Tuple{Real,Real}, samples::Int; kwargs...)
