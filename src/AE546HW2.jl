@@ -234,7 +234,7 @@ function guidancesim(guidance_law::AE546HW2.GuidanceLaw;
                 label  = L"\dot{\theta}(t)",
                 xlabel = L"$t$ [s]",
                 gridstyle=:dash,
-                ylabel = L"$\theta$ [rad]")
+                ylabel = L"$\dot\theta$ [rad/s]")
 
     savefig(pxy,    @sprintf "plot_path_%s_.pdf" guidancelawtext)
     savefig(pθ_dot, @sprintf "plot_thetadot_%s_.pdf" guidancelawtext)
