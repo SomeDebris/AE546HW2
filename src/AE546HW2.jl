@@ -4,12 +4,13 @@ using Plots
 using LaTeXStrings
 using Match
 using Printf
+using LinearAlgebra
 #=using ModelingToolkit=#
 #=using DifferentialEquations=#
 
 greet() = print("Hello World!")
 
-@enum GuidanceLaw Persuit FixedLead ConstantBearing
+@enum GuidanceLaw Persuit FixedLead ConstantBearing ProportionalNavigation
 
 struct GuidanceProblem
     # Missile velocity vector
@@ -95,7 +96,7 @@ end
 
 round_up_nearest(x, step) = ceil(x / step) * step
 
-function p2a(guidance_law::AE546HW2.GuidanceLaw;
+function guidancesim(guidance_law::AE546HW2.GuidanceLaw;
         Velocity_missile = 300,
         Velocity_target = 200,
         R₀ = 6000,
@@ -249,13 +250,122 @@ function p2a(guidance_law::AE546HW2.GuidanceLaw;
     return 0
 end
 
-function problem3functions(N;
+struct PNGuidanceIC2D
+    position_missile::Tuple{Real,Real}
+    position_target::Tuple{Real,Real}
+    velocity_missile::Real
+    velocity_target::Real
+    θ_missile::Real
+    θ_target::Real
+    λ::Real
+    T::Real
+    hit_tolerance::Real
+    target_acceleration::Real
+end
+
+
+
+function PNtraj(ic::PNGuidanceIC2D; maxiter::UInt=10000, δt = 0.1)
+    pos_missile = collect(ic.position_missile)
+    pos_target  = collect(ic.position_target)
+
+    trajectory_missile = [ic.position_missile]
+    trajectory_target  = [ic.position_target]
+
+    β = 0.0
+    β_diff1 = 0.0
+    θ_missile = ic.θ_missile
+    θ_missile_diff1 = 0.0
+
+    β_lastiter = 0.0
+    θ_missile_lastiter = 0.0
+
+    θ_missile_command = 0.0
+    θ_missile_diff1_command = 0.0
+
+    velocity_target = ic.velocity_target
+
+    iterations::UInt = 0
+    while true
+        iterations += 1
+
+        β = atan(pos_target[2] - pos_missile[2],  pos_target[1] - pos_missile[1])
+        β_diff1 = (β - β_lastiter) / δt
+
+        θ_missile_diff1_command = ic.λ * β_diff1
+
+        if ic.T != 0
+            θ_missile_command += θ_missile_diff1_command * δt
+            θ_missile += ((θ_missile_command - θ_missile)/ic.T) * δt
+        else
+            θ_missile += θ_missile_diff1_command * δt
+        end
+
+        pos_missile += ic.velocity_missile .* [cos(θ_missile), sin(θ_missile)] .* δt
+        pos_target  += velocity_target  .* [cos(ic.θ_target), sin(ic.θ_target)] .* δt
+
+        velocity_target += ic.target_acceleration * δt
+
+        push!(trajectory_missile, Tuple(pos_missile))
+        push!(trajectory_target,  Tuple(pos_target))
+
+        β_lastiter = β
+
+        if norm(pos_target - pos_missile) < ic.hit_tolerance
+            @debug "Breaking PN guidance loop: target reached" missile_target_distance=norm(pos_target - pos_missile) ic.hit_tolerance pos_target pos_missile
+            break
+        end
+
+        if iterations >= maxiter
+            @error "Maximum iteratins reached." maxiter
+            break
+        end
+    end
+
+    time_final = iterations * δt
+
+    trajectory_missile, trajectory_target, time_final
+end
+
+
+#=function missdist(T, N; maxiter::UInt=10000, δt = 0.1, n_T = 0.0, θ₀ = deg2rad(3))=#
+#=    x = [0, 0]=#
+#=    x_diff = x=#
+#==#
+#=    θ = θ₀=#
+#==#
+#=    λVm = N * V_C=#
+#==#
+#=    y_t = velocit=#
+#==#
+#=    #=pos_target = collect(pos_target_ic)=#=#
+#==#
+#=    # Assumptions: V_C, V_M do not change.=#
+#==#
+#=    # this value shall be used as N in the function.=#
+#=    # thought process: we are given an initial value for θ₀. Thus, we can compute the value of the terms that comprise N.=#
+#==#
+#==#
+#=    iterations:UInt = 0=#
+#=    while true=#
+#=        iterations += 1=#
+#==#
+#=        pos_target  += velocity_target  .* [cos(ic.θ_target), sin(ic.θ_target)] .* δt=#
+#==#
+#=        x_diff = [ x[2],=#
+#=                  -x[2]/T - (λVm / T) * atan(x[1] - y_t=#
+#=end=#
+
+
+function computeyandacfunctions(N;
     Velocity_closing = 120,
     Velocity_missile = 300,
     θ₀ = deg2rad(5),
     R₀ = 6000,
     n_T = 0,
     samples::Int = 3000)
+
+    @debug "values" N n_T
 
     # Compute the values of λ for this problem
     λ = @. N * Velocity_closing / Velocity_missile
@@ -287,8 +397,9 @@ function problem3functions(N;
 
     a_c(t) = @match (n_T, N) begin
         (nt, Nset) where nt == 0 => @. - (Velocity_missile * θ₀)/(time_final^(N-1)) * (time_final - t)^(N-2)
-        (nt, Nset) where (nt != 0  && Nset == 1)  => Inf
-        (nt, Nset) where (nt != 0  && Nset == 2)  => -(1 + 2/time_final) * n_T
+        (nt, Nset) where (nt != 0  && Nset == 1)  => @. Inf
+        # NOTE: the "+ (t * 0)" at the end makes julia output a series instead of a single value
+        (nt, Nset) where (nt != 0  && Nset == 2)  => @. -(1 + 2/time_final) * n_T + (t * 0)
         (nt, Nset) where (nt != 0  && !(Nset in (1,2)))  => @. (n_T * N) / (2 - N) * (1 - (1 - t/time_final)^(N-2))
     end
 
@@ -296,7 +407,7 @@ function problem3functions(N;
 end
 
 function problem3at_ntsetting(N_values, n_T::Float64)
-    funcs = problem3functions.(N_values; n_T=fill(n_T, length(N_values)))
+    funcs = computeyandacfunctions.(N_values; n_T=n_T)
 
     yPlot   = plot(; xlabel=L"$t$ [s]", ylabel=L"$y(t)$ [m]", gridstyle=:dash)
     a_cPlot = plot(; xlabel=L"$t$ [s]", ylabel=L"$a_c(t)$ [m/s]", gridstyle=:dash)
@@ -305,17 +416,20 @@ function problem3at_ntsetting(N_values, n_T::Float64)
 
     for (idx, N) in enumerate(N_values)
         tbounds = (0, funcs[idx][3])
-        problem3plot_y!(yPlot, funcs[idx][1], tbounds, 500; label=L"N = %$(N)", ls=dashpatterncyle[idx % length(dashpatterncyle)])
-        problem3plot_a_c!(a_cPlot, funcs[idx][2], tbounds, 500; label=L"N = %$(N)", ls=dashpatterncyle[idx % length(dashpatterncyle)])
+        @debug "The N value being passed to the plotting functions is:" N
+        problem3plot_y!(yPlot, funcs[idx][1], tbounds, 500; label=L"N = %$(N)", ls=dashpatterncyle[((idx-1) % length(dashpatterncyle)) + 1])
+        problem3plot_a_c!(a_cPlot, funcs[idx][2], tbounds, 500; label=L"N = %$(N)", ls=dashpatterncyle[((idx-1) % length(dashpatterncyle)) + 1])
     end
 
-    savefig(yPlot, "plot_p3-y_nT0.pdf")
-    savefig(a_cPlot, "plot_p3-a_c_nT0.pdf")
+    savefig(yPlot, @sprintf "plot_p3-y_nT%g.pdf" n_T)
+    savefig(a_cPlot, @sprintf "plot_p3-a_c_nT%g.pdf" n_T)
 end
+
+
 
 function problem3plot_y!(plotref::Plots.Plot, y::Function, time_bounds::Tuple{Real,Real}, samples::Int; kwargs...)
     trange = LinRange(time_bounds[1], time_bounds[2], samples)
-    @debug "Adding y(t) to plot" plotref y time_bounds
+    @debug "Adding y(t) to plot" plotref y time_bounds trange
 
     plot!(plotref,
           trange, y(trange);
@@ -330,7 +444,7 @@ end
 
 function problem3plot_a_c!(plotref::Plots.Plot, a_c::Function, time_bounds::Tuple{Real,Real}, samples::Int; kwargs...)
     trange = LinRange(time_bounds[1], time_bounds[2], samples)
-    @debug "Adding a_c(t) to plot" plotref a_c time_bounds
+    @debug "Adding a_c(t) to plot" plotref a_c time_bounds trange
 
     plot!(plotref,
           trange, a_c(trange);
@@ -343,6 +457,119 @@ function problem3plot_a_c!(plotref::Plots.Plot, a_c::Function, time_bounds::Tupl
           #=ylims=(0,round_up_nearest(y(time_final), 10)))=#
 end
 
+struct PNGuidanceIC3D
+    VM
+    VT
+    N
+    δt
+    t_max
+    tolR
+    rm
+    rt
+    ψT
+    γT
+end
 
+function PN3Dsim(ic::PNGuidanceIC3D, γ_d=false)
+    missile_position = collect(ic.rm)
+    target_position  = collect(ic.rt)
+
+    vhatT = [cos(ic.γT) * sin(ic.ψT),
+             cos(ic.γT) * cos(ic.ψT),
+             sin(ic.γT)]
+
+    velocity_target = ic.VT * vhatT
+
+    R₀ = target_position - missile_position
+    dist_xy₀ = hypot(R₀[1], R₀[2])
+    ψM₀   = atan(R₀[1], R₀[2])
+    γM₀   = atan(R₀[3], dist_xy₀)
+
+    ψ     = ψM₀
+    γ     = γM₀
+    # number of datapoints:
+    K = Int(ceil(ic.t_max/ic.δt)) + 1
+    @debug "What is the value of K?" K ic.t_max ic.δt
+    # data accumulators:
+    RM = Vector{Tuple{Float64,Float64,Float64}}(undef, K)
+    RT = Vector{Tuple{Float64,Float64,Float64}}(undef, K)
+
+    Ψ = Vector{Float64}(undef, K)
+    Γ = Vector{Float64}(undef, K)
+
+    Ψ_L = Vector{Float64}(undef, K)
+    Γ_L = Vector{Float64}(undef, K)
+
+    tlog = Vector{Float64}(undef, K)
+
+    azimuthElevation(v) = (atan(v[1], v[2]),
+                           atan(v[3], hypot(v[1], v[2])))
+
+    ψL_lastiter, γL_lastiter = azimuthElevation(R₀)
+
+    iters = 0;
+
+    for t in 0:ic.δt:ic.t_max
+        iters += 1
+        Rvec = target_position - missile_position
+        R    = norm(Rvec)
+
+        if R < ic.tolR
+            @debug "R is lesser than tolR. breaking loop." R ic.tolR
+            break
+        end
+
+        ψL, γL = azimuthElevation(Rvec)
+
+        dψL = angle(exp(1im*ψL) / exp(1im*ψL_lastiter)) / ic.δt
+        dγL = (γL - γL_lastiter) / ic.δt
+
+        # PN commands on missile yaw/elevation
+        dψ_cmd = ic.N * dψL
+        dγ_cmd = @match γ_d begin
+            (γd) where γd == false  =>  ic.N * dγL
+            Real => ic.N * dγL + (γ_d - γL)
+        end
+
+
+        # update missile pointing
+        ψ += dψ_cmd * ic.δt
+        γ += dγ_cmd * ic.δt
+
+        # missile and target velocity vectors
+        vhatM = [cos(γ) * sin(ψ),
+                 cos(γ) * cos(ψ),
+                 sin(γ)]
+        vm = ic.VM * vhatM
+
+        # integrate positions
+        missile_position += vm * ic.δt
+        target_position  += velocity_target * ic.δt
+
+        # Log
+        RM[iters] = Tuple(missile_position)
+        RT[iters] = Tuple(target_position)
+        Ψ[iters] = ψ
+        Γ[iters] = γ
+        Ψ_L[iters] = ψL
+        Γ_L[iters] = γL
+        tlog[iters] = t
+
+        # prepare next tick
+        ψL_lastiter = ψL
+        γL_lastiter = γL
+    end
+
+    send_values = range(1,iters-1)
+
+    (iters = iters,
+     RM = RM[send_values],
+     RT = RT[send_values],
+     Ψ = Ψ[send_values],
+     Γ = Γ[send_values],
+     Ψ_L = Ψ_L[send_values],
+     Γ_L = Γ_L[send_values],
+     tlog = tlog[send_values])
+end
 
 end # module AE546HW2
