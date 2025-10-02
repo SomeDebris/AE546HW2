@@ -59,10 +59,6 @@ function p1b()
     R_dot = 0.0
     β_dot = 0.0
 
-    # * KRIS!!!
-    # * we have to kill the fucking titan
-    # Shoot missile           ♡            Do nothing
-
     for k in range(1, N)
         R_dot = Velocity_target * cos(β - θ_T) - Velocity_missile * cos(β - θ)
         β_dot = -(Velocity_target * sin(β - θ_T) - Velocity_missile * sin(β - θ)) / R
@@ -144,10 +140,6 @@ function guidancesim(guidance_law::AE546HW2.GuidanceLaw;
     missile_position = [0.0, 0.0]
     target_position =  missile_position .+ [R₀*cos(β₀), R₀*sin(β₀)]
     @debug "target position initial" target_position
-
-    # * KRIS!!!
-    # * we have to kill the fucking titan
-    # Shoot missile           ♡            Do nothing
 
     iters = 0
 
